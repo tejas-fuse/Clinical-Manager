@@ -24,6 +24,7 @@ import { ProfileView } from './components/ProfileView';
 import { AnalyticsView } from './components/AnalyticsView';
 import { AdminPanel } from './components/AdminPanel';
 import { AdminWardManagement } from './components/AdminWardManagement';
+import { InChargeStaffPanel } from './components/InChargeStaffPanel';
 import { ROLES, SHIFTS, USER_ROLES, REQUEST_STATUS } from './constants/config';
 import { getStartOfWeek, formatDateKey, getHolidayName } from './utils/helpers';
 
@@ -622,6 +623,13 @@ export default function DutyRosterApp() {
           allAssignments={allAssignments}
           currentWardId={currentWardId}
           staffList={staffList}
+        />
+      )}
+
+      {/* Staff Management Tab (for In-Charge only) */}
+      {activeTab === 'staff-management' && USER_ROLES[currentUser?.role]?.canApprove && (
+        <InChargeStaffPanel 
+          currentUser={currentUser}
         />
       )}
 

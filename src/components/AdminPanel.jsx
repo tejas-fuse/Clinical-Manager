@@ -12,7 +12,9 @@ export const AdminPanel = () => {
     username: '',
     password: '',
     role: 'in_charge',
-    assignedWards: [] // Array of ward IDs
+    assignedWards: [], // Array of ward IDs
+    securityQuestion: 'What is your preferred role?',
+    securityAnswer: ''
   });
 
   useEffect(() => {
@@ -96,7 +98,7 @@ export const AdminPanel = () => {
   const cancelEdit = () => {
     setEditingUser(null);
     setIsAddingUser(false);
-    setFormData({ fullName: '', username: '', password: '', role: 'in_charge', assignedWards: [] });
+    setFormData({ fullName: '', username: '', password: '', role: 'in_charge', assignedWards: [], securityQuestion: 'What is your preferred role?', securityAnswer: '' });
   };
 
   const toggleWardAssignment = (wardId) => {
@@ -208,6 +210,39 @@ export const AdminPanel = () => {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Security Question for Password Recovery */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <h3 className="font-semibold text-gray-900 mb-3 text-sm">Security Question (for password recovery)</h3>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Question</label>
+              <select
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={formData.securityQuestion}
+                onChange={(e) => setFormData({ ...formData, securityQuestion: e.target.value })}
+              >
+                <option>What is your preferred role?</option>
+                <option>What is your favorite ward/department?</option>
+                <option>What is your employee ID?</option>
+                <option>What is your joining year at this hospital?</option>
+                <option>What is the name of the ward you work in most frequently?</option>
+                <option>What is your shift preference?</option>
+                <option>What is the color of your hospital ID card?</option>
+                <option>In which year did you complete your healthcare qualification?</option>
+              </select>
+            </div>
+            <div className="mt-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Answer</label>
+              <input
+                type="text"
+                placeholder="e.g., Staff, ICU, EMP001"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={formData.securityAnswer}
+                onChange={(e) => setFormData({ ...formData, securityAnswer: e.target.value })}
+              />
+              <p className="text-xs text-gray-500 mt-1">This answer is case-insensitive for password recovery</p>
+            </div>
           </div>
           <div className="flex gap-3 mt-4">
             <button

@@ -41,8 +41,9 @@ export const Navigation = ({ activeTab, onTabChange, currentUser, userRoles }) =
   tabs.push({ id: 'roster', label: 'Duty Roster', icon: Calendar });
   tabs.push({ id: 'profile', label: 'My Profile', icon: User });
 
-  // Add analytics tab for in-charge only
+  // Add staff management tab for in-charge only
   if (currentUser && userRoles[currentUser.role]?.canApprove) {
+    tabs.push({ id: 'staff-management', label: 'Staff Management', icon: Users });
     tabs.push({ id: 'analytics', label: 'Staff Analytics', icon: BarChart3 });
   }
 
