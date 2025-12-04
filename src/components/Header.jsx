@@ -56,7 +56,7 @@ export const Header = ({
                                       <option key={w.id} value={w.id}>{w.name}</option>
                                   ))}
                               </select>
-                              {USER_ROLES[currentUser?.role]?.canEdit && (
+                              {USER_ROLES[currentUser?.role]?.canManageUsers && (
                                   <button 
                                       onClick={onDeleteWard}
                                       className="p-1.5 hover:bg-red-100 text-slate-400 hover:text-red-600 rounded-md transition-colors"

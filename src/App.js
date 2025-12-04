@@ -78,17 +78,33 @@ export default function DutyRosterApp() {
     const saved = localStorage.getItem('duty_roster_wards');
     return saved ? JSON.parse(saved) : []; 
   });
+
+  // Normalize assigned ward IDs (handles legacy data storing objects instead of IDs)
+  const assignedWardIds = useMemo(() => {
+    if (!currentUser?.assignedWards) return [];
+    return currentUser.assignedWards
+      .map(entry => typeof entry === 'string' ? entry : entry?.id)
+      .filter(Boolean);
+  }, [currentUser]);
+  
+  // Wards visible to the current user
+  const filteredWards = useMemo(() => {
+    if (!currentUser) return [];
+    const isAdmin = !!USER_ROLES[currentUser.role]?.canManageUsers;
+    if (isAdmin) return wards;
+    return wards.filter(w => assignedWardIds.includes(w.id));
+  }, [wards, currentUser, assignedWardIds]);
   
   const [currentWardId, setCurrentWardId] = useState(() => {
-     return wards.length > 0 ? wards[0].id : '';
+     return filteredWards.length > 0 ? filteredWards[0].id : '';
   });
 
-  // Ensure currentWardId is valid if wards exist but ID is empty
+  // Ensure currentWardId is valid within filtered wards
   useEffect(() => {
-    if (wards.length > 0 && !wards.find(w => w.id === currentWardId)) {
-      setCurrentWardId(wards[0].id);
+    if (filteredWards.length > 0 && !filteredWards.find(w => w.id === currentWardId)) {
+      setCurrentWardId(filteredWards[0].id);
     }
-  }, [wards, currentWardId]);
+  }, [filteredWards, currentWardId]);
 
   // Staff State (Keyed by Ward ID)
   const [allStaff, setAllStaff] = useState(() => {
@@ -103,9 +119,9 @@ export default function DutyRosterApp() {
   });
 
   // Derived State for Current View
-  const staffList = allStaff[currentWardId] || [];
+  const staffList = useMemo(() => allStaff[currentWardId] || [], [allStaff, currentWardId]);
   const assignments = allAssignments[currentWardId] || {};
-  const currentWardName = wards.find(w => w.id === currentWardId)?.name || '';
+  const currentWardName = filteredWards.find(w => w.id === currentWardId)?.name || '';
 
   // Filter staff based on user role permissions
   const visibleStaffList = useMemo(() => {
@@ -350,9 +366,29 @@ export default function DutyRosterApp() {
   };
 
   const handleApproveRequest = (requestId) => {
+    // Find the request
+    const request = changeRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    // Find the staff member in the current ward
+    const wardStaff = allStaff[currentWardId] || [];
+    const staff = wardStaff.find(s => s.name.toLowerCase() === request.userName.toLowerCase());
+    
+    if (staff) {
+      // Add the staff member to the assignment
+      assignStaff(request.dateKey, getShiftIdFromLabel(request.shiftLabel), staff.id);
+    }
+
+    // Update request status
     setChangeRequests(prev => 
       prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.APPROVED } : r)
     );
+  };
+
+  // Helper function to get shift ID from shift label
+  const getShiftIdFromLabel = (label) => {
+    const shift = SHIFTS.find(s => s.label === label);
+    return shift ? shift.id : 'morning';
   };
 
   const handleRejectRequest = (requestId) => {
@@ -379,7 +415,7 @@ export default function DutyRosterApp() {
       {/* Header - Hide for admin */}
       {!USER_ROLES[currentUser?.role]?.canManageUsers && (
         <Header 
-          wards={wards}
+          wards={filteredWards}
           currentWardId={currentWardId}
           setCurrentWardId={setCurrentWardId}
           weekDates={weekDates}
@@ -444,8 +480,9 @@ export default function DutyRosterApp() {
       {activeTab === 'roster' && (
         <main className="max-w-[1600px] mx-auto p-4 md:p-6">
         
-        {wards.length === 0 ? (
+        {filteredWards.length === 0 ? (
             // EMPTY STATE
+          USER_ROLES[currentUser?.role]?.canCreateWard ? (
             <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
                 <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
                     <Building2 size={32} className="text-blue-500" />
@@ -460,6 +497,15 @@ export default function DutyRosterApp() {
                     Create First Ward
                 </button>
             </div>
+            ) : (
+            <div className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-dashed border-gray-300">
+              <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                <Building2 size={32} className="text-gray-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">No Wards Assigned Yet</h3>
+              <p className="text-gray-500 max-w-sm text-center">An administrator needs to assign wards to your account before you can manage schedules here.</p>
+            </div>
+            )
         ) : (
             // MAIN ROSTER
             <>
@@ -669,6 +715,7 @@ export default function DutyRosterApp() {
           onAddStaff={handleAddStaff}
           onAssignStaff={assignStaff}
           onRemoveStaff={handleRemoveStaffGlobal}
+          isInCharge={currentUser?.role === 'in_charge'}
         />
       )}
 

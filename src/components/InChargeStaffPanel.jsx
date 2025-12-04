@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, Trash2, Save, X, Users } from 'lucide-react';
-import { USER_ROLES } from '../constants/config';
+
+const normalizeWardIds = (wardEntries) => {
+  return (wardEntries || [])
+    .map(entry => typeof entry === 'string' ? entry : entry?.id)
+    .filter(Boolean);
+};
+
+const MANAGEABLE_ROLES = ['staff', 'attendant', 'sweeper'];
+const SECURITY_QUESTIONS = [
+  'What is your preferred role?',
+  'What is your favorite ward/department?',
+  'What is your employee ID?',
+  'What is your joining year at this hospital?',
+  'What is the name of the ward you work in most frequently?',
+  'What is your shift preference?',
+  'What is the color of your hospital ID card?',
+  'In which year did you complete your healthcare qualification?'
+];
 
 export const InChargeStaffPanel = ({ currentUser }) => {
   const [allUsers, setAllUsers] = useState([]);
@@ -15,27 +32,33 @@ export const InChargeStaffPanel = ({ currentUser }) => {
     securityAnswer: ''
   });
 
-  const MANAGEABLE_ROLES = ['staff', 'attendant', 'sweeper'];
-  const SECURITY_QUESTIONS = [
-    'What is your preferred role?',
-    'What is your favorite ward/department?',
-    'What is your employee ID?',
-    'What is your joining year at this hospital?',
-    'What is the name of the ward you work in most frequently?',
-    'What is your shift preference?',
-    'What is the color of your hospital ID card?',
-    'In which year did you complete your healthcare qualification?'
-  ];
-
   useEffect(() => {
     loadAllData();
   }, []);
 
-  // Reload staff whenever a user is updated
+  // Reload staff whenever relevant data changes
   useEffect(() => {
-    if (wards.length > 0 && allUsers.length > 0) {
-      filterStaffInMyWards();
+    if (!currentUser) {
+      setStaffInMyWards([]);
+      return;
     }
+
+    const myWardIds = normalizeWardIds(currentUser.assignedWards);
+    if (wards.length === 0 || allUsers.length === 0 || myWardIds.length === 0) {
+      setStaffInMyWards([]);
+      return;
+    }
+
+    const staffList = allUsers.filter(user => {
+      if (!MANAGEABLE_ROLES.includes(user.role)) {
+        return false;
+      }
+
+      const userWards = normalizeWardIds(user.assignedWards);
+      return userWards.some(wardId => myWardIds.includes(wardId));
+    });
+
+    setStaffInMyWards(staffList);
   }, [allUsers, wards, currentUser]);
 
   const loadAllData = () => {
@@ -43,24 +66,6 @@ export const InChargeStaffPanel = ({ currentUser }) => {
     const savedWards = JSON.parse(localStorage.getItem('duty_roster_wards') || '[]');
     setAllUsers(savedUsers);
     setWards(savedWards);
-  };
-
-  const filterStaffInMyWards = () => {
-    // Get all staff assigned to current user's wards
-    const myWardIds = currentUser?.assignedWards || [];
-    
-    const staffList = allUsers.filter(user => {
-      // Must be manageable roles
-      if (!MANAGEABLE_ROLES.includes(user.role)) {
-        return false;
-      }
-      
-      // Must be assigned to at least one of my wards
-      const userWards = user.assignedWards || [];
-      return userWards.some(wardId => myWardIds.includes(wardId));
-    });
-
-    setStaffInMyWards(staffList);
   };
 
   const saveUsers = (updatedUsers) => {
@@ -139,7 +144,7 @@ export const InChargeStaffPanel = ({ currentUser }) => {
     return ward ? ward.name : 'Unknown Ward';
   };
 
-  const myWardIds = currentUser?.assignedWards || [];
+  const myWardIds = normalizeWardIds(currentUser?.assignedWards);
   const myWardNames = myWardIds.map(getWardName).join(', ');
 
   return (
@@ -194,7 +199,7 @@ export const InChargeStaffPanel = ({ currentUser }) => {
                     </td>
                     <td className="px-6 py-4 text-sm">
                       <div className="flex gap-1 flex-wrap">
-                        {(staff.assignedWards || []).map(wardId => (
+                        {normalizeWardIds(staff.assignedWards).map(wardId => (
                           <span key={wardId} className="inline-block bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">
                             {getWardName(wardId)}
                           </span>

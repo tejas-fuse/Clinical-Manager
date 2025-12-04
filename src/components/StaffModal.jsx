@@ -15,7 +15,8 @@ export const StaffModal = ({
   setNewStaffRole,
   onAddStaff,
   onAssignStaff,
-  onRemoveStaff
+  onRemoveStaff,
+  isInCharge = false
 }) => {
   if (!isOpen) return null;
 
@@ -26,7 +27,7 @@ export const StaffModal = ({
         <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
           <div className="flex flex-col">
             <h2 className="font-bold text-lg text-gray-800">
-                {selectedCell ? 'Assign Staff' : 'Manage Staff List'}
+                {selectedCell ? 'Assign Staff' : 'Manage Staff Duties'}
             </h2>
             <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">{currentWardName}</span>
           </div>
@@ -47,43 +48,52 @@ export const StaffModal = ({
             </div>
           )}
 
-          {/* Add New Staff Form */}
-          <div className="mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Add New Worker to {currentWardName}</label>
-            <div className="flex flex-col gap-2">
-              <input
-                type="text"
-                placeholder="Enter Name"
-                className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <select 
-                  className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={newStaffRole}
-                  onChange={(e) => setNewStaffRole(e.target.value)}
-                >
-                  {Object.values(ROLES).map(r => (
-                    <option key={r.id} value={r.id}>{r.label}</option>
-                  ))}
-                </select>
-                <button 
-                  onClick={onAddStaff}
-                  disabled={!newStaffName}
-                  className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Add
-                </button>
+          {/* Add New Staff Form - Only show for Admin (non In-Charge) */}
+          {!isInCharge && (
+            <div className="mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+              <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Add New Worker to {currentWardName}</label>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="text"
+                  placeholder="Enter Name"
+                  className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={newStaffName}
+                  onChange={(e) => setNewStaffName(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <select 
+                    className="border border-gray-300 rounded px-3 py-2 text-sm flex-1 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newStaffRole}
+                    onChange={(e) => setNewStaffRole(e.target.value)}
+                  >
+                    {Object.values(ROLES).map(r => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                  <button 
+                    onClick={onAddStaff}
+                    disabled={!newStaffName}
+                    className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Add
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Info for In-Charge */}
+          {isInCharge && (
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
+              Select staff members assigned to your ward to mark their duties.
+            </div>
+          )}
 
           {/* Staff List */}
-          <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Available Staff ({currentWardName})</label>
+          <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">Assigned Staff ({currentWardName})</label>
           <div className="space-y-2">
             {staffList.length === 0 ? (
-              <p className="text-center text-gray-400 py-4 text-sm">No staff added to this ward yet.</p>
+              <p className="text-center text-gray-400 py-4 text-sm">No staff assigned to this ward yet.</p>
             ) : (
               staffList.map(staff => {
                  const isAssigned = selectedCell && assignments[selectedCell.dateKey]?.[selectedCell.shiftId]?.includes(staff.id);
@@ -115,13 +125,15 @@ export const StaffModal = ({
                       {selectedCell && isAssigned && (
                         <span className="text-green-600 text-xs font-bold px-2">Assigned</span>
                       )}
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); onRemoveStaff(staff.id); }}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Delete staff member permanently"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {!isInCharge && (
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); onRemoveStaff(staff.id); }}
+                          className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Delete staff member permanently"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
