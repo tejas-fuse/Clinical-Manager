@@ -2,6 +2,8 @@
 
 A comprehensive duty roster management system for healthcare facilities with role-based access control and detailed analytics.
 
+Live App: https://clinical-manager-tt.vercel.app
+
 ## 🎯 Features
 
 ### Authentication & Authorization
@@ -47,18 +49,18 @@ A comprehensive duty roster management system for healthcare facilities with rol
 ### Installation
 
 1. Clone the repository:
-```bash
+```powershell
 git clone https://github.com/tejas-fuse/Clinical-Manager.git
 cd Clinical-Manager
 ```
 
 2. Install dependencies:
-```bash
+```powershell
 npm install
 ```
 
 3. Start the development server:
-```bash
+```powershell
 npm start
 ```
 
@@ -66,11 +68,11 @@ npm start
 
 ### First Time Setup
 
-1. Click "Register" to create your first account
-2. Choose your role (recommend creating an In-Charge account first)
-3. Create a ward (e.g., "ICU", "General", "Emergency")
-4. Add staff members to the ward
-5. Start assigning duties!
+1. Default admin is created automatically: `admin / admin123`
+2. On first admin login, you will be prompted to set a new password
+3. As Admin: create wards (e.g., "ICU", "General", "Emergency")
+4. Add user accounts and assign wards to them
+5. In-Charge can then assign duties within their assigned wards
 
 ## 📊 Usage Guide
 
@@ -78,7 +80,7 @@ npm start
 1. **Manage Roster**: Click on any cell to assign staff to duties
 2. **View Requests**: Click the "Requests" button (shows pending count)
 3. **View Analytics**: Navigate to "Staff Analytics" tab to see performance metrics
-4. **Manage Staff**: Add or remove staff members from the ward
+4. **Assign Only**: Cannot add or remove users; can only assign duties to staff allocated to their ward
 
 ### For Staff Users
 1. **View Roster**: See your assigned duties for the week
@@ -103,16 +105,48 @@ All data is stored locally in the browser's localStorage:
 
 ## 🔒 Security Note
 
-This is a client-side application with basic authentication. For production use, implement:
-- Server-side authentication
-- Password hashing (bcrypt)
-- JWT tokens
-- Database integration
-- API endpoints
+- Master password reset flow has been removed.
+- Admin must change the default password on first login.
+- For production use, consider server-side auth, password hashing, JWT, and a database.
 
-## 📄 License
+## 📂 File Structure
 
-MIT License - feel free to use and modify for your healthcare facility.
+```
+Clinical-Manager/
+  public/
+    index.html
+  src/
+    components/
+      AdminPanel.jsx
+      AdminWardManagement.jsx
+      Header.jsx
+      InChargeStaffPanel.jsx
+      LoginModal.jsx
+      Navigation.jsx
+      RequestModals.jsx
+      StaffBadge.jsx
+      StaffModal.jsx
+      WardModal.jsx
+      AnalyticsView.jsx
+      ProfileView.jsx
+    constants/
+      config.js        # Roles, permissions, shifts, holidays, statuses
+    utils/
+      helpers.js       # Date and formatting helpers
+    App.js             # Main app: state, routing, roster
+    index.js           # React bootstrap
+    index.css          # Global styles
+  package.json         # Scripts and dependencies
+  README.md
+```
+
+### LocalStorage Keys
+- `clinical_users`
+- `clinical_current_user`
+- `duty_roster_wards`
+- `duty_roster_all_staff`
+- `duty_roster_all_assignments`
+- `duty_roster_change_requests`
 
 ## 🤝 Contributing
 
