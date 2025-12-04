@@ -1,10 +1,78 @@
-export const ROLES = {
+// User roles for login and permissions
+export const USER_ROLES = {
+  admin: { 
+    id: 'admin', 
+    label: 'Administrator', 
+    canEdit: false, 
+    canApprove: false, 
+    canManageUsers: true,
+    canPrint: false,
+    canCreateWard: true,
+    canAddStaff: true,
+    showInLogin: false,
+    visibleRoles: [] // Admin sees user management, not roster
+  },
+  in_charge: { 
+    id: 'in_charge', 
+    label: 'In-Charge Sister', 
+    canEdit: true, 
+    canApprove: true,
+    canManageUsers: false,
+    canPrint: true,
+    canCreateWard: false,
+    canAddStaff: false,
+    showInLogin: true,
+    visibleRoles: ['in_charge', 'staff'] // Can see In-Charge and Staff in timetable
+  },
+  staff: { 
+    id: 'staff', 
+    label: 'Staff (Sis/Bro)', 
+    canEdit: false, 
+    canApprove: false,
+    canManageUsers: false,
+    canPrint: false,
+    canCreateWard: false,
+    canAddStaff: false,
+    showInLogin: true,
+    visibleRoles: ['in_charge', 'staff'] // Can see In-Charge and Staff in timetable
+  },
+  attendant: { 
+    id: 'attendant', 
+    label: 'Attendant', 
+    canEdit: false, 
+    canApprove: false,
+    canManageUsers: false,
+    canPrint: false,
+    canCreateWard: false,
+    canAddStaff: false,
+    showInLogin: true,
+    visibleRoles: ['attendant', 'sweeper'] // Can see Attendant and Sweeper in timetable
+  },
+  sweeper: { 
+    id: 'sweeper', 
+    label: 'Sweeper', 
+    canEdit: false, 
+    canApprove: false,
+    canManageUsers: false,
+    canPrint: false,
+    canCreateWard: false,
+    canAddStaff: false,
+    showInLogin: true,
+    visibleRoles: ['sweeper'] // Can only see Sweeper in timetable
+  }
+};
+
+// Staff roles for duty assignments (these are the actual job roles)
+export const STAFF_ROLES = {
   IN_CHARGE: { id: 'in_charge', label: 'In-Charge Sister', color: 'bg-purple-100 text-purple-800 border-purple-200', dot: 'bg-purple-500' },
   STAFF: { id: 'staff', label: 'Staff (Sis/Bro)', color: 'bg-blue-100 text-blue-800 border-blue-200', dot: 'bg-blue-500' },
   ATTENDANT: { id: 'attendant', label: 'Attendant', color: 'bg-emerald-100 text-emerald-800 border-emerald-200', dot: 'bg-emerald-500' },
   SWEEPER: { id: 'sweeper', label: 'Sweeper', color: 'bg-orange-100 text-orange-800 border-orange-200', dot: 'bg-orange-500' },
   LEAVE_RELIEVER: { id: 'reliever', label: 'Leave Reliever', color: 'bg-gray-100 text-gray-800 border-gray-200', dot: 'bg-gray-500' },
 };
+
+// Keep ROLES for backward compatibility
+export const ROLES = STAFF_ROLES;
 
 export const SHIFTS = [
   { id: 'morning', label: 'Morning', time: '8:00 AM - 2:00 PM', icon: 'Sun', color: 'text-amber-500' },
@@ -29,4 +97,10 @@ export const HOLIDAYS = {
   '09-07': 'Ganesh Chaturthi',
   '10-12': 'Dussehra',
   '11-01': 'Diwali',
+};
+
+export const REQUEST_STATUS = {
+  PENDING: 'pending',
+  APPROVED: 'approved',
+  REJECTED: 'rejected'
 };

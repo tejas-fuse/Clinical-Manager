@@ -7,13 +7,24 @@ import {
   AlertCircle,
   Building2,
   UserPlus,
-  Plus
+  Plus,
+  MessageSquare,
+  Calendar,
+  User,
+  LogOut
 } from 'lucide-react';
 import { Header } from './components/Header';
+import { Navigation } from './components/Navigation';
 import { StaffBadge } from './components/StaffBadge';
 import { WardModal } from './components/WardModal';
 import { StaffModal } from './components/StaffModal';
-import { ROLES, SHIFTS } from './constants/config';
+import { LoginModal } from './components/LoginModal';
+import { ChangeRequestModal, RequestsModal } from './components/RequestModals';
+import { ProfileView } from './components/ProfileView';
+import { AnalyticsView } from './components/AnalyticsView';
+import { AdminPanel } from './components/AdminPanel';
+import { AdminWardManagement } from './components/AdminWardManagement';
+import { ROLES, SHIFTS, USER_ROLES, REQUEST_STATUS } from './constants/config';
 import { getStartOfWeek, formatDateKey, getHolidayName } from './utils/helpers';
 
 // Icon mapping for shifts
@@ -25,6 +36,39 @@ const SHIFT_ICONS = {
 };
 
 export default function DutyRosterApp() {
+  // --- Authentication State ---
+  const [currentUser, setCurrentUser] = useState(() => {
+    const saved = localStorage.getItem('clinical_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(!currentUser);
+
+  // Initialize default admin if no users exist
+  useEffect(() => {
+    const savedUsers = localStorage.getItem('clinical_users');
+    const parsedUsers = savedUsers ? JSON.parse(savedUsers) : [];
+    
+    if (parsedUsers.length === 0) {
+      const defaultAdmin = {
+        id: 'admin-default-' + Date.now(),
+        username: 'admin',
+        password: 'admin123',
+        fullName: 'System Administrator',
+        role: 'admin'
+      };
+      localStorage.setItem('clinical_users', JSON.stringify([defaultAdmin]));
+      console.log('Created default admin user');
+    } else {
+      console.log('Users already exist:', parsedUsers.length);
+    }
+  }, []);
+
+  // --- Navigation State ---
+  const [activeTab, setActiveTab] = useState(() => {
+    // Admin starts on admin panel, others on roster
+    return currentUser && USER_ROLES[currentUser.role]?.canManageUsers ? 'admin' : 'roster';
+  });
+
   // --- State ---
   const [currentDate, setCurrentDate] = useState(new Date());
   
@@ -62,17 +106,41 @@ export default function DutyRosterApp() {
   const assignments = allAssignments[currentWardId] || {};
   const currentWardName = wards.find(w => w.id === currentWardId)?.name || '';
 
+  // Filter staff based on user role permissions
+  const visibleStaffList = useMemo(() => {
+    const userRole = USER_ROLES[currentUser?.role];
+    if (!userRole || !userRole.visibleRoles) return staffList;
+    
+    // In-charge can see all, but we still apply filter for other roles
+    return staffList.filter(staff => userRole.visibleRoles.includes(staff.role));
+  }, [staffList, currentUser]);
+
   // Modals
   const [selectedCell, setSelectedCell] = useState(null);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [isWardModalOpen, setIsWardModalOpen] = useState(false);
+  const [isChangeRequestModalOpen, setIsChangeRequestModalOpen] = useState(false);
+  const [isRequestsModalOpen, setIsRequestsModalOpen] = useState(false);
+  const [requestCell, setRequestCell] = useState(null);
   
   // Form Inputs
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffRole, setNewStaffRole] = useState('staff');
   const [newWardNameInput, setNewWardNameInput] = useState('');
 
+  // Change Requests State
+  const [changeRequests, setChangeRequests] = useState(() => {
+    const saved = localStorage.getItem('duty_roster_change_requests');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const pendingRequestsCount = changeRequests.filter(r => r.status === REQUEST_STATUS.PENDING).length;
+
   // --- Effects ---
+  useEffect(() => {
+    localStorage.setItem('clinical_current_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
   useEffect(() => {
     localStorage.setItem('duty_roster_wards', JSON.stringify(wards));
   }, [wards]);
@@ -84,6 +152,10 @@ export default function DutyRosterApp() {
   useEffect(() => {
     localStorage.setItem('duty_roster_all_assignments', JSON.stringify(allAssignments));
   }, [allAssignments]);
+
+  useEffect(() => {
+    localStorage.setItem('duty_roster_change_requests', JSON.stringify(changeRequests));
+  }, [changeRequests]);
 
   // --- Date Logic ---
   const startOfWeek = useMemo(() => getStartOfWeek(currentDate), [currentDate]);
@@ -99,6 +171,30 @@ export default function DutyRosterApp() {
   }, [startOfWeek]);
 
   // --- Handlers ---
+
+  const handleLogin = (user) => {
+    console.log('User logged in:', user);
+    console.log('User role:', user.role);
+    console.log('Can manage users:', USER_ROLES[user.role]?.canManageUsers);
+    setCurrentUser(user);
+    setIsLoginModalOpen(false);
+    // Set active tab based on user role
+    if (USER_ROLES[user.role]?.canManageUsers) {
+      console.log('Setting active tab to admin');
+      setActiveTab('admin');
+    } else {
+      console.log('Setting active tab to roster');
+      setActiveTab('roster');
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to logout?')) {
+      setCurrentUser(null);
+      setIsLoginModalOpen(true);
+      setActiveTab('roster');
+    }
+  };
 
   const handlePrevWeek = () => {
     const d = new Date(currentDate);
@@ -182,8 +278,18 @@ export default function DutyRosterApp() {
   };
 
   const openAssignmentModal = (dateKey, shiftId) => {
-    setSelectedCell({ dateKey, shiftId });
-    setIsStaffModalOpen(true);
+    const userRole = USER_ROLES[currentUser?.role];
+    
+    if (userRole?.canEdit) {
+      // In-charge can edit directly
+      setSelectedCell({ dateKey, shiftId });
+      setIsStaffModalOpen(true);
+    } else {
+      // Staff can only request changes
+      const shift = SHIFTS.find(s => s.id === shiftId);
+      setRequestCell({ dateKey, shiftId, shiftLabel: shift?.label });
+      setIsChangeRequestModalOpen(true);
+    }
   };
 
   const assignStaff = (staffId) => {
@@ -238,26 +344,104 @@ export default function DutyRosterApp() {
     setSelectedCell(null);
   };
 
+  const handleSubmitChangeRequest = (request) => {
+    setChangeRequests(prev => [...prev, request]);
+  };
+
+  const handleApproveRequest = (requestId) => {
+    setChangeRequests(prev => 
+      prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.APPROVED } : r)
+    );
+  };
+
+  const handleRejectRequest = (requestId) => {
+    setChangeRequests(prev => 
+      prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.REJECTED } : r)
+    );
+  };
+
   // --- Render ---
+
+  if (!currentUser) {
+    return (
+      <LoginModal 
+        isOpen={isLoginModalOpen}
+        onClose={() => {}}
+        onLogin={handleLogin}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 text-slate-800 font-sans">
       
-      {/* Header */}
-      <Header 
-        wards={wards}
-        currentWardId={currentWardId}
-        setCurrentWardId={setCurrentWardId}
-        weekDates={weekDates}
-        onPrevWeek={handlePrevWeek}
-        onNextWeek={handleNextWeek}
-        onPrint={handlePrint}
-        onManageStaff={() => setIsStaffModalOpen(true)}
-        onOpenWardModal={openWardModal}
-        onDeleteWard={handleDeleteWard}
+      {/* Header - Hide for admin */}
+      {!USER_ROLES[currentUser?.role]?.canManageUsers && (
+        <Header 
+          wards={wards}
+          currentWardId={currentWardId}
+          setCurrentWardId={setCurrentWardId}
+          weekDates={weekDates}
+          onPrevWeek={handlePrevWeek}
+          onNextWeek={handleNextWeek}
+          onPrint={handlePrint}
+          onManageStaff={() => setIsStaffModalOpen(true)}
+          onOpenWardModal={openWardModal}
+          onDeleteWard={handleDeleteWard}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onViewRequests={() => setIsRequestsModalOpen(true)}
+          pendingRequestsCount={pendingRequestsCount}
+        />
+      )}
+
+      {/* Simple header for admin */}
+      {USER_ROLES[currentUser?.role]?.canManageUsers && (
+        <header className="bg-white border-b border-gray-200 shadow-sm print:hidden">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar size={24} className="text-purple-600" />
+              <h1 className="text-xl font-bold text-gray-900">Clinical Manager - Admin</h1>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-purple-100 p-2 rounded-lg">
+                <User size={18} className="text-purple-600" />
+                <span className="text-sm font-semibold text-purple-900">{currentUser.fullName}</span>
+              </div>
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              >
+                <LogOut size={18} />
+                Logout
+              </button>
+            </div>
+          </div>
+        </header>
+      )}
+
+      {/* Navigation Tabs */}
+      <Navigation 
+        activeTab={activeTab} 
+        onTabChange={setActiveTab}
+        currentUser={currentUser}
+        userRoles={USER_ROLES}
       />
 
-      <main className="max-w-[1600px] mx-auto p-4 md:p-6">
+      {/* Main Content Area */}
+      {activeTab === 'admin' && USER_ROLES[currentUser?.role]?.canManageUsers && (
+        <>
+          {console.log('Rendering AdminPanel')}
+          <AdminPanel />
+        </>
+      )}
+
+      {activeTab === 'admin-wards' && USER_ROLES[currentUser?.role]?.canManageUsers && (
+        <AdminWardManagement />
+      )}
+
+      {activeTab === 'roster' && (
+        <main className="max-w-[1600px] mx-auto p-4 md:p-6">
         
         {wards.length === 0 ? (
             // EMPTY STATE
@@ -338,6 +522,13 @@ export default function DutyRosterApp() {
                                 {weekDates.map(date => {
                                 const dateKey = formatDateKey(date);
                                 const assignedIds = assignments[dateKey]?.[shift.id] || [];
+                                // Filter to show only visible staff
+                                const visibleAssignedIds = assignedIds.filter(id => {
+                                  const staff = staffList.find(s => s.id === id);
+                                  if (!staff) return false;
+                                  const userRole = USER_ROLES[currentUser?.role];
+                                  return !userRole?.visibleRoles || userRole.visibleRoles.includes(staff.role);
+                                });
                                 const holidayName = getHolidayName(date);
                                 const isSunday = date.getDay() === 0;
                                 const isHolidayOrSunday = holidayName || isSunday;
@@ -353,23 +544,33 @@ export default function DutyRosterApp() {
                                     onClick={() => openAssignmentModal(dateKey, shift.id)}
                                     >
                                     <div className="flex flex-col gap-1 h-full">
-                                        {assignedIds.map(id => {
+                                        {visibleAssignedIds.map(id => {
                                         const staff = staffList.find(s => s.id === id);
                                         if (!staff) return null;
+                                        const canEdit = USER_ROLES[currentUser?.role]?.canEdit;
                                         return (
                                             <StaffBadge 
                                             key={id} 
                                             staff={staff} 
-                                            onDelete={() => removeAssignment(dateKey, shift.id, id)} 
+                                            onDelete={canEdit ? () => removeAssignment(dateKey, shift.id, id) : null}
+                                            canDelete={canEdit}
                                             />
                                         );
                                         })}
                                         
                                         {/* Empty State Placeholder (Screen only) */}
-                                        {assignedIds.length === 0 && (
+                                        {visibleAssignedIds.length === 0 && (
                                             <div className="h-full w-full flex items-center justify-center opacity-0 hover:opacity-100 print:hidden cursor-pointer">
                                                 <span className="text-xs text-gray-400 flex items-center gap-1 bg-white px-2 py-1 rounded border border-dashed border-gray-300">
-                                                    <UserPlus size={12}/> Assign
+                                                    {USER_ROLES[currentUser?.role]?.canEdit ? (
+                                                        <>
+                                                            <UserPlus size={12}/> Assign
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <MessageSquare size={12}/> Request Change
+                                                        </>
+                                                    )}
                                                 </span>
                                             </div>
                                         )}
@@ -411,7 +612,29 @@ export default function DutyRosterApp() {
                 </div>
             </>
         )}
-      </main>
+        </main>
+      )}
+
+      {/* Profile Tab */}
+      {activeTab === 'profile' && (
+        <ProfileView 
+          currentUser={currentUser}
+          allAssignments={allAssignments}
+          currentWardId={currentWardId}
+          staffList={staffList}
+        />
+      )}
+
+      {/* Analytics Tab */}
+      {activeTab === 'analytics' && USER_ROLES[currentUser?.role]?.canApprove && (
+        <AnalyticsView 
+          currentUser={currentUser}
+          allAssignments={allAssignments}
+          currentWardId={currentWardId}
+          staffList={staffList}
+          currentWardName={currentWardName}
+        />
+      )}
 
       {/* CREATE WARD MODAL */}
       <WardModal 
@@ -423,12 +646,12 @@ export default function DutyRosterApp() {
       />
 
       {/* STAFF MANAGEMENT MODAL */}
-      {currentWardId && (
+      {currentWardId && USER_ROLES[currentUser?.role]?.canEdit && (
         <StaffModal 
           isOpen={isStaffModalOpen}
           onClose={handleCloseStaffModal}
           selectedCell={selectedCell}
-          staffList={staffList}
+          staffList={visibleStaffList}
           currentWardName={currentWardName}
           assignments={assignments}
           newStaffName={newStaffName}
@@ -440,6 +663,31 @@ export default function DutyRosterApp() {
           onRemoveStaff={handleRemoveStaffGlobal}
         />
       )}
+
+      {/* CHANGE REQUEST MODAL (for staff without edit permissions) */}
+      {requestCell && (
+        <ChangeRequestModal 
+          isOpen={isChangeRequestModalOpen}
+          onClose={() => {
+            setIsChangeRequestModalOpen(false);
+            setRequestCell(null);
+          }}
+          dateKey={requestCell.dateKey}
+          shiftLabel={requestCell.shiftLabel}
+          currentUser={currentUser}
+          onSubmitRequest={handleSubmitChangeRequest}
+        />
+      )}
+
+      {/* REQUESTS MANAGEMENT MODAL (for in-charge) */}
+      <RequestsModal 
+        isOpen={isRequestsModalOpen}
+        onClose={() => setIsRequestsModalOpen(false)}
+        requests={changeRequests}
+        onApprove={handleApproveRequest}
+        onReject={handleRejectRequest}
+        canApprove={USER_ROLES[currentUser?.role]?.canApprove}
+      />
 
       {/* CSS For Print Optimization */}
       <style>{`
