@@ -1,41 +1,20 @@
 import React, { useState } from 'react';
-import { LogIn, UserPlus, X, Shield, ChevronDown, ChevronUp, Key } from 'lucide-react';
-import { USER_ROLES } from '../constants/config';
+import { LogIn, X, Key } from 'lucide-react';
 
 export const LoginModal = ({ isOpen, onClose, onLogin }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [userRole, setUserRole] = useState('staff');
+  // Removed unused registration fields
   const [error, setError] = useState('');
-  const [showHint, setShowHint] = useState(false);
+  // Removed unused hint state
   
   // Password recovery
   const [recoveryUsername, setRecoveryUsername] = useState('');
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [recoveryError, setRecoveryError] = useState('');
 
-  const handleReset = () => {
-    // Ask for admin master password to prevent unauthorized reset
-    const masterPassword = prompt('⚠️ SECURITY: Enter the admin master password to reset all data.\n\nThis action cannot be undone!');
-    
-    if (!masterPassword) {
-      return; // User cancelled
-    }
-
-    if (masterPassword !== 'admin@123') {
-      alert('❌ Incorrect master password. Reset denied.');
-      return;
-    }
-
-    if (window.confirm('⚠️ This will delete ALL data including users, wards, staff, and assignments.\n\nAre you absolutely sure?')) {
-      localStorage.clear();
-      alert('✅ All data has been cleared. The app will reload with default admin account.\n\nUsername: admin\nPassword: admin123');
-      window.location.reload();
-    }
-  };
+  // Removed master password reset flow per requirement
 
   const handleRecoverPassword = () => {
     setRecoveryError('');
@@ -80,13 +59,26 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
       return;
     }
 
-    // Only allow login, not registration
-    // Registration is handled by admin
+    // Only allow login; registration is handled by admin
     const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
     const user = users.find(u => u.username === username && u.password === password);
 
     if (!user) {
       setError('Invalid username or password');
+      return;
+    }
+
+    // Force default admin to change password on first login
+    if (user.role === 'admin' && user.password === 'admin123') {
+      const newPass = prompt('Security update: Please set a new admin password now.');
+      if (!newPass || newPass.trim().length < 6) {
+        alert('Password must be at least 6 characters.');
+        return;
+      }
+      const updatedUsers = users.map(u => u.id === user.id ? { ...u, password: newPass.trim() } : u);
+      localStorage.setItem('clinical_users', JSON.stringify(updatedUsers));
+      const updatedUser = { ...user, password: newPass.trim() };
+      onLogin(updatedUser);
       return;
     }
 
@@ -241,13 +233,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
             Forgot password?
           </button>
 
-          <button
-            type="button"
-            onClick={handleReset}
-            className="block w-full text-xs text-red-500 hover:text-red-700 underline"
-          >
-            Reset App (requires master password)
-          </button>
+          {/* App reset removed per requirement */}
         </div>
       </div>
     </div>
