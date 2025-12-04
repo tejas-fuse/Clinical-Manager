@@ -244,11 +244,16 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900/60 to-slate-700/60 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 p-6 border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-900/70 via-blue-800/60 to-indigo-900/70 backdrop-blur-sm animate-[fadeIn_300ms_ease-out]">
+      {/* White translucent bouncy balls - login page only */}
+      <div className="absolute top-20 left-10 w-10 h-10 rounded-full bg-white/40 shadow-lg ring-1 ring-white/30 backdrop-blur motion-safe:animate-bounce" aria-hidden="true"></div>
+      <div className="absolute bottom-24 right-12 w-6 h-6 rounded-full bg-white/40 shadow-md ring-1 ring-white/30 backdrop-blur motion-safe:animate-bounce" style={{animationDelay: '250ms'}} aria-hidden="true"></div>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 p-6 border border-blue-200/60 motion-safe:animate-[slideUp_300ms_ease-out]">
+        <div className="absolute -top-24 -left-16 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl" aria-hidden="true"></div>
+        <div className="absolute -bottom-24 -right-16 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl" aria-hidden="true"></div>
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
-            <LogIn size={24} className="text-blue-600" />
+            <LogIn size={24} className="text-blue-600 motion-safe:animate-[float_3s_ease-in-out_infinite]" />
             Login to Clinical Manager
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -275,7 +280,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
               <input
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Enter password"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500/70"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
@@ -286,14 +291,14 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
               <button
                 type="button"
                 onClick={() => setShowPassword(s => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? 'Hide' : 'Show'}
               </button>
             </div>
             {capsLockOn && (
-              <p className="mt-1 text-xs text-amber-600">Caps Lock is ON</p>
+              <p className="mt-1 text-xs text-amber-600 motion-safe:animate-pulse">Caps Lock is ON</p>
             )}
           </div>
 
@@ -305,7 +310,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm hover:shadow-md"
             disabled={!username || !password}
           >
             <LogIn size={20} />
