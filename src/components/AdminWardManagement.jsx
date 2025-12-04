@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Trash2, Users as UsersIcon, X } from 'lucide-react';
+import { Building2, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
 
 export const AdminWardManagement = () => {
   const [wards, setWards] = useState([]);

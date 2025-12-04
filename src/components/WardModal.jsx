@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Plus } from 'lucide-react';
+import { X } from 'lucide-react';
 
 export const WardModal = ({ isOpen, onClose, newWardName, setNewWardName, onSave }) => {
   if (!isOpen) return null;

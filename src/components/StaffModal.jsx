@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Trash2, UserPlus } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { ROLES, SHIFTS, USER_ROLES } from '../constants/config';
 
 export const StaffModal = ({ 

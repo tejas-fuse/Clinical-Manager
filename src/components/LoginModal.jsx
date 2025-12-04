@@ -1,42 +1,25 @@
-import React, { useState } from 'react';
-import { LogIn, UserPlus, X, Shield, ChevronDown, ChevronUp, Key } from 'lucide-react';
-import { USER_ROLES } from '../constants/config';
+import React, { useState, useRef, useEffect } from 'react';
+import { LogIn, X, Key } from 'lucide-react';
 
 export const LoginModal = ({ isOpen, onClose, onLogin }) => {
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [userRole, setUserRole] = useState('staff');
   const [error, setError] = useState('');
-  const [showHint, setShowHint] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+  const [forceChangeAdminPass, setForceChangeAdminPass] = useState(false);
+  const [newAdminPass, setNewAdminPass] = useState('');
+  const [confirmAdminPass, setConfirmAdminPass] = useState('');
   
   // Password recovery
   const [recoveryUsername, setRecoveryUsername] = useState('');
   const [securityAnswer, setSecurityAnswer] = useState('');
   const [recoveryError, setRecoveryError] = useState('');
 
-  const handleReset = () => {
-    // Ask for admin master password to prevent unauthorized reset
-    const masterPassword = prompt('⚠️ SECURITY: Enter the admin master password to reset all data.\n\nThis action cannot be undone!');
-    
-    if (!masterPassword) {
-      return; // User cancelled
-    }
-
-    if (masterPassword !== 'admin@123') {
-      alert('❌ Incorrect master password. Reset denied.');
-      return;
-    }
-
-    if (window.confirm('⚠️ This will delete ALL data including users, wards, staff, and assignments.\n\nAre you absolutely sure?')) {
-      localStorage.clear();
-      alert('✅ All data has been cleared. The app will reload with default admin account.\n\nUsername: admin\nPassword: admin123');
-      window.location.reload();
-    }
-  };
-
+  // Removed master password reset flow per requirement
   const handleRecoverPassword = () => {
     setRecoveryError('');
     
@@ -80,8 +63,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
       return;
     }
 
-    // Only allow login, not registration
-    // Registration is handled by admin
+    // Only allow login; registration is handled by admin
     const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
     const user = users.find(u => u.username === username && u.password === password);
 
@@ -90,8 +72,21 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
       return;
     }
 
+    // Force default admin to change password on first login
+    if (user.role === 'admin' && user.password === 'admin123') {
+      setForceChangeAdminPass(true);
+      return;
+    }
+
     onLogin(user);
   };
+
+  useEffect(() => {
+    // Focus username on open
+    if (isOpen && !isRecoveringPassword) {
+      setTimeout(() => usernameRef.current?.focus(), 50);
+    }
+  }, [isOpen, isRecoveringPassword]);
 
   if (!isOpen) return null;
 
@@ -174,11 +169,86 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
     );
   }
 
+  // Admin forced password change modal
+  if (forceChangeAdminPass) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md m-4 p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Set New Admin Password</h2>
+            <button onClick={() => setForceChangeAdminPass(false)} className="text-gray-400 hover:text-gray-600">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">New Password</label>
+              <input
+                type="password"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={newAdminPass}
+                onChange={(e) => setNewAdminPass(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Confirm Password</label>
+              <input
+                type="password"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={confirmAdminPass}
+                onChange={(e) => setConfirmAdminPass(e.target.value)}
+                placeholder="Re-enter password"
+              />
+            </div>
+
+            <button
+              onClick={() => {
+                setError('');
+                if ((newAdminPass || '').trim().length < 6) {
+                  setError('Password must be at least 6 characters.');
+                  return;
+                }
+                if (newAdminPass !== confirmAdminPass) {
+                  setError('Passwords do not match.');
+                  return;
+                }
+                const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
+                const user = users.find(u => u.username === username);
+                if (!user) {
+                  setError('Admin user not found.');
+                  return;
+                }
+                const updatedUsers = users.map(u => u.id === user.id ? { ...u, password: newAdminPass.trim() } : u);
+                localStorage.setItem('clinical_users', JSON.stringify(updatedUsers));
+                setForceChangeAdminPass(false);
+                setNewAdminPass('');
+                setConfirmAdminPass('');
+                onLogin({ ...user, password: newAdminPass.trim() });
+              }}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            >
+              Save Password & Continue
+            </button>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm mt-2">
+                {error}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md m-4 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-slate-900/60 to-slate-700/60 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md m-4 p-6 border border-slate-200">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <LogIn size={24} className="text-blue-600" />
             Login to Clinical Manager
           </h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -195,19 +265,36 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
               className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              ref={usernameRef}
             />
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              placeholder="Enter password"
-              className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSubmit(e)}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter password"
+                className="w-full border border-gray-300 rounded-lg px-4 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={(e) => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                onKeyUp={(e) => setCapsLockOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                onKeyPress={(e) => e.key === 'Enter' && handleSubmit(e)}
+                ref={passwordRef}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(s => !s)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {capsLockOn && (
+              <p className="mt-1 text-xs text-amber-600">Caps Lock is ON</p>
+            )}
           </div>
 
           {error && (
@@ -218,7 +305,8 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            disabled={!username || !password}
           >
             <LogIn size={20} />
             Login
@@ -241,13 +329,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
             Forgot password?
           </button>
 
-          <button
-            type="button"
-            onClick={handleReset}
-            className="block w-full text-xs text-red-500 hover:text-red-700 underline"
-          >
-            Reset App (requires master password)
-          </button>
+          {/* App reset removed per requirement */}
         </div>
       </div>
     </div>
