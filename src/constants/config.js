@@ -22,7 +22,7 @@ export const USER_ROLES = {
     canCreateWard: false,
     canAddStaff: false,
     showInLogin: true,
-    visibleRoles: ['in_charge', 'staff'] // Can see In-Charge and Staff in timetable
+    visibleRoles: ['in_charge', 'staff', 'attendant', 'sweeper'] // Can see In-Charge, Staff, Attendant, Sweeper in timetable
   },
   staff: { 
     id: 'staff', 
