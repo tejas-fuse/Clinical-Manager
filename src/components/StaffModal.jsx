@@ -1,13 +1,15 @@
 import React from 'react';
-import { X, Trash2 } from 'lucide-react';
-import { ROLES, SHIFTS } from '../constants/config';
+import { X, Trash2, UserPlus } from 'lucide-react';
+import { ROLES, SHIFTS, USER_ROLES } from '../constants/config';
 
 export const StaffModal = ({ 
   isOpen, 
   onClose, 
   selectedCell,
   staffList,
+  wardUsers = [],
   currentWardName,
+  currentWardId,
   assignments,
   newStaffName,
   setNewStaffName,
@@ -16,9 +18,37 @@ export const StaffModal = ({
   onAddStaff,
   onAssignStaff,
   onRemoveStaff,
-  isInCharge = false
+  isInCharge = false,
+  allStaff = {},
+  setAllStaff = () => {}
 }) => {
   if (!isOpen) return null;
+
+  // For In-Charge: Add a ward user to the staff list for duty assignment
+  const handleAddUserToStaffList = (user) => {
+    // Check if already exists in staff list
+    const currentStaffList = allStaff[currentWardId] || [];
+    if (currentStaffList.find(s => s.id === user.id)) {
+      alert('This user is already added to the staff list');
+      return;
+    }
+
+    const newStaffMember = {
+      id: user.id,
+      name: user.fullName,
+      role: user.role
+    };
+
+    setAllStaff(prev => ({
+      ...prev,
+      [currentWardId]: [...(prev[currentWardId] || []), newStaffMember]
+    }));
+  };
+
+  // Available users that are not yet in the staff list (for In-Charge)
+  const availableUsers = wardUsers.filter(user => {
+    return !staffList.find(staff => staff.id === user.id);
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm print:hidden">
@@ -84,9 +114,57 @@ export const StaffModal = ({
 
           {/* Info for In-Charge */}
           {isInCharge && (
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
-              Select staff members assigned to your ward to mark their duties.
-            </div>
+            <>
+              <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100 text-sm text-blue-800">
+                <p className="font-semibold mb-1">Add Users to Staff List</p>
+                <p>Select users assigned to your ward by the admin to add them to the duty roster.</p>
+              </div>
+
+              {/* Available Users to Add */}
+              {availableUsers.length > 0 && (
+                <div className="mb-6 bg-gray-50 p-3 rounded-lg border border-gray-200">
+                  <label className="block text-xs font-semibold text-gray-500 uppercase mb-2">
+                    Available Users ({availableUsers.length})
+                  </label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {availableUsers.map(user => (
+                      <div 
+                        key={user.id}
+                        className="flex items-center justify-between p-2 rounded-lg border border-gray-200 bg-white hover:border-blue-300 transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 font-semibold text-xs">
+                            {user.fullName.charAt(0)}
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm text-gray-900">{user.fullName}</p>
+                            <p className="text-xs text-gray-500">{USER_ROLES[user.role]?.label}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleAddUserToStaffList(user)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded text-xs font-medium hover:bg-blue-700"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {availableUsers.length === 0 && staffList.length > 0 && (
+                <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-100 text-sm text-green-800">
+                  ✓ All assigned users have been added to the staff list
+                </div>
+              )}
+
+              {wardUsers.length === 0 && (
+                <div className="mb-4 p-3 bg-yellow-50 rounded-lg border border-yellow-100 text-sm text-yellow-800">
+                  No users have been assigned to this ward by the admin yet.
+                </div>
+              )}
+            </>
           )}
 
           {/* Staff List */}

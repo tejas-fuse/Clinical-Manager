@@ -123,6 +123,24 @@ export default function DutyRosterApp() {
   const assignments = allAssignments[currentWardId] || {};
   const currentWardName = filteredWards.find(w => w.id === currentWardId)?.name || '';
 
+  // Get all users assigned to current ward (for In-Charge to assign duties)
+  const wardUsers = useMemo(() => {
+    if (!currentWardId) return [];
+    const allUsers = JSON.parse(localStorage.getItem('clinical_users') || '[]');
+    const normalizeWardIds = (wardEntries) => {
+      return (wardEntries || [])
+        .map(entry => typeof entry === 'string' ? entry : entry?.id)
+        .filter(Boolean);
+    };
+    
+    return allUsers
+      .filter(user => user.role !== 'admin')
+      .filter(user => {
+        const userWards = normalizeWardIds(user.assignedWards);
+        return userWards.includes(currentWardId);
+      });
+  }, [currentWardId]);
+
   // Filter staff based on user role permissions
   const visibleStaffList = useMemo(() => {
     const userRole = USER_ROLES[currentUser?.role];
@@ -706,7 +724,9 @@ export default function DutyRosterApp() {
           onClose={handleCloseStaffModal}
           selectedCell={selectedCell}
           staffList={visibleStaffList}
+          wardUsers={wardUsers}
           currentWardName={currentWardName}
+          currentWardId={currentWardId}
           assignments={assignments}
           newStaffName={newStaffName}
           setNewStaffName={setNewStaffName}
@@ -716,6 +736,8 @@ export default function DutyRosterApp() {
           onAssignStaff={assignStaff}
           onRemoveStaff={handleRemoveStaffGlobal}
           isInCharge={currentUser?.role === 'in_charge'}
+          allStaff={allStaff}
+          setAllStaff={setAllStaff}
         />
       )}
 
