@@ -16,18 +16,13 @@ export const ChangeRequestModal = ({
     e.preventDefault();
     if (!reason.trim()) return;
 
-    const request = {
-      id: Date.now(),
+    onSubmitRequest({
       userId: currentUser.id,
       userName: currentUser.fullName,
       dateKey,
       shiftLabel,
-      reason: reason.trim(),
-      status: REQUEST_STATUS.PENDING,
-      createdAt: new Date().toISOString()
-    };
-
-    onSubmitRequest(request);
+      reason: reason.trim()
+    });
     setReason('');
     onClose();
   };

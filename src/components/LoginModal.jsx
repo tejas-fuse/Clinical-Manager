@@ -1,18 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { LogIn, X, Key } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export const LoginModal = ({ isOpen, onClose, onLogin }) => {
   const [isRecoveringPassword, setIsRecoveringPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const usernameRef = useRef(null);
   const passwordRef = useRef(null);
-  const [forceChangeAdminPass, setForceChangeAdminPass] = useState(false);
-  const [newAdminPass, setNewAdminPass] = useState('');
-  const [confirmAdminPass, setConfirmAdminPass] = useState('');
   
   // Password recovery
   const [recoveryUsername, setRecoveryUsername] = useState('');
@@ -21,40 +20,10 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
 
   // Removed master password reset flow per requirement
   const handleRecoverPassword = () => {
-    setRecoveryError('');
-    
-    if (!recoveryUsername.trim() || !securityAnswer.trim()) {
-      setRecoveryError('Please enter username and security answer');
-      return;
-    }
-
-    const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
-    const user = users.find(u => u.username === recoveryUsername);
-
-    if (!user) {
-      setRecoveryError('Username not found');
-      return;
-    }
-
-    if (!user.securityQuestion || !user.securityAnswer) {
-      setRecoveryError('No security question set for this user. Contact administrator.');
-      return;
-    }
-
-    if (user.securityAnswer.toLowerCase() !== securityAnswer.toLowerCase()) {
-      setRecoveryError('Incorrect answer to security question');
-      return;
-    }
-
-    // Show the password
-    alert(`✅ Password Recovery Successful!\n\nUsername: ${user.username}\nPassword: ${user.password}\n\nPlease change your password after logging in.`);
-    
-    setIsRecoveringPassword(false);
-    setRecoveryUsername('');
-    setSecurityAnswer('');
+    setRecoveryError('Password recovery is not available. Contact an administrator.');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
@@ -63,22 +32,25 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
       return;
     }
 
-    // Only allow login; registration is handled by admin
-    const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
-    const user = users.find(u => u.username === username && u.password === password);
+    try {
+      setIsSubmitting(true);
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: username,
+        password
+      });
 
-    if (!user) {
-      setError('Invalid username or password');
-      return;
+      if (authError || !data?.user) {
+        setError(authError?.message || 'Invalid credentials');
+        return;
+      }
+
+      onLogin(data.user);
+    } catch (err) {
+      setError('Unable to login right now. Please retry.');
+      console.error(err);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    // Force default admin to change password on first login
-    if (user.role === 'admin' && user.password === 'admin123') {
-      setForceChangeAdminPass(true);
-      return;
-    }
-
-    onLogin(user);
   };
 
   useEffect(() => {
@@ -169,79 +141,7 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
     );
   }
 
-  // Admin forced password change modal
-  if (forceChangeAdminPass) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md m-4 p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Set New Admin Password</h2>
-            <button onClick={() => setForceChangeAdminPass(false)} className="text-gray-400 hover:text-gray-600">
-              <X size={24} />
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">New Password</label>
-              <input
-                type="password"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={newAdminPass}
-                onChange={(e) => setNewAdminPass(e.target.value)}
-                placeholder="At least 6 characters"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">Confirm Password</label>
-              <input
-                type="password"
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={confirmAdminPass}
-                onChange={(e) => setConfirmAdminPass(e.target.value)}
-                placeholder="Re-enter password"
-              />
-            </div>
-
-            <button
-              onClick={() => {
-                setError('');
-                if ((newAdminPass || '').trim().length < 6) {
-                  setError('Password must be at least 6 characters.');
-                  return;
-                }
-                if (newAdminPass !== confirmAdminPass) {
-                  setError('Passwords do not match.');
-                  return;
-                }
-                const users = JSON.parse(localStorage.getItem('clinical_users') || '[]');
-                const user = users.find(u => u.username === username);
-                if (!user) {
-                  setError('Admin user not found.');
-                  return;
-                }
-                const updatedUsers = users.map(u => u.id === user.id ? { ...u, password: newAdminPass.trim() } : u);
-                localStorage.setItem('clinical_users', JSON.stringify(updatedUsers));
-                setForceChangeAdminPass(false);
-                setNewAdminPass('');
-                setConfirmAdminPass('');
-                onLogin({ ...user, password: newAdminPass.trim() });
-              }}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              Save Password & Continue
-            </button>
-
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm mt-2">
-                {error}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Legacy admin forced password change flow is removed with Supabase Auth
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-blue-900/70 via-blue-800/60 to-indigo-900/70 backdrop-blur-sm animate-[fadeIn_300ms_ease-out]">
@@ -311,10 +211,10 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
           <button
             type="submit"
             className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm hover:shadow-md"
-            disabled={!username || !password}
+            disabled={!username || !password || isSubmitting}
           >
             <LogIn size={20} />
-            Login
+            {isSubmitting ? 'Logging in...' : 'Login'}
           </button>
         </form>
 

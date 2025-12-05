@@ -70,6 +70,12 @@ alter table public.change_requests enable row level security;
 alter table public.users_app enable row level security;
 
 -- Simple policies for testing (open read, admin can write). Replace with stricter rules for production.
+drop policy if exists "Allow read all" on public.wards;
+drop policy if exists "Allow read all" on public.staff;
+drop policy if exists "Allow read all" on public.assignments;
+drop policy if exists "Allow read all" on public.change_requests;
+drop policy if exists "Allow read all" on public.users_app;
+
 create policy "Allow read all" on public.wards for select using (true);
 create policy "Allow read all" on public.staff for select using (true);
 create policy "Allow read all" on public.assignments for select using (true);
@@ -77,6 +83,12 @@ create policy "Allow read all" on public.change_requests for select using (true)
 create policy "Allow read all" on public.users_app for select using (true);
 
 -- Allow inserts/updates/deletes only for service_role key (backend) or later for role-based checks.
+drop policy if exists "Service role full access" on public.wards;
+drop policy if exists "Service role full access" on public.staff;
+drop policy if exists "Service role full access" on public.assignments;
+drop policy if exists "Service role full access" on public.change_requests;
+drop policy if exists "Service role full access" on public.users_app;
+
 create policy "Service role full access" on public.wards for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 create policy "Service role full access" on public.staff for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 create policy "Service role full access" on public.assignments for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
@@ -84,6 +96,19 @@ create policy "Service role full access" on public.change_requests for all using
 create policy "Service role full access" on public.users_app for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');
 
 -- Authenticated users can read/write (relaxed for MVP; tighten later with role-based checks)
+drop policy if exists "Authenticated can insert wards" on public.wards;
+drop policy if exists "Authenticated can update wards" on public.wards;
+drop policy if exists "Authenticated can delete wards" on public.wards;
+drop policy if exists "Authenticated can insert staff" on public.staff;
+drop policy if exists "Authenticated can update staff" on public.staff;
+drop policy if exists "Authenticated can delete staff" on public.staff;
+drop policy if exists "Authenticated can insert assignments" on public.assignments;
+drop policy if exists "Authenticated can update assignments" on public.assignments;
+drop policy if exists "Authenticated can delete assignments" on public.assignments;
+drop policy if exists "Authenticated can insert change_requests" on public.change_requests;
+drop policy if exists "Authenticated can update change_requests" on public.change_requests;
+drop policy if exists "Authenticated can delete change_requests" on public.change_requests;
+
 create policy "Authenticated can insert wards" on public.wards for insert with check (auth.role() = 'authenticated');
 create policy "Authenticated can update wards" on public.wards for update using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 create policy "Authenticated can delete wards" on public.wards for delete using (auth.role() = 'authenticated');
@@ -114,6 +139,7 @@ begin
 end;
 $$ language plpgsql security definer;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();

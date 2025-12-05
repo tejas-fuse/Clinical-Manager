@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Trash2, Users as UsersIcon } from 'lucide-react';
+import { Building2, Plus, Trash2, Users as UsersIcon, Loader2 } from 'lucide-react';
+import { fetchWards, createWard, deleteWard } from '../services/wards';
 
 export const AdminWardManagement = () => {
   const [wards, setWards] = useState([]);
@@ -7,15 +8,26 @@ export const AdminWardManagement = () => {
   const [isAddingWard, setIsAddingWard] = useState(false);
   const [newWardName, setNewWardName] = useState('');
   const [selectedWard, setSelectedWard] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     loadWards();
     loadUsers();
   }, []);
 
-  const loadWards = () => {
-    const savedWards = JSON.parse(localStorage.getItem('duty_roster_wards') || '[]');
-    setWards(savedWards);
+  const loadWards = async () => {
+    try {
+      setError('');
+      setIsLoading(true);
+      const data = await fetchWards();
+      setWards(data);
+    } catch (err) {
+      setError('Failed to load wards. Please retry.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const loadUsers = () => {
@@ -24,7 +36,7 @@ export const AdminWardManagement = () => {
     setUsers(savedUsers.filter(u => u.role !== 'admin'));
   };
 
-  const handleAddWard = () => {
+  const handleAddWard = async () => {
     if (!newWardName.trim()) {
       alert('Please enter a ward name');
       return;
@@ -35,33 +47,45 @@ export const AdminWardManagement = () => {
       return;
     }
 
-    const newWard = {
-      id: Date.now().toString(),
-      name: newWardName,
-      createdAt: new Date().toISOString()
-    };
-
-    const updatedWards = [...wards, newWard];
-    localStorage.setItem('duty_roster_wards', JSON.stringify(updatedWards));
-    setWards(updatedWards);
-    setNewWardName('');
-    setIsAddingWard(false);
+    try {
+      setError('');
+      setIsLoading(true);
+      const created = await createWard(newWardName.trim());
+      setWards(prev => [...prev, created]);
+      setNewWardName('');
+      setIsAddingWard(false);
+    } catch (err) {
+      setError('Failed to create ward. Please retry.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteWard = (wardId) => {
+  const handleDeleteWard = async (wardId) => {
     if (window.confirm('Are you sure you want to delete this ward? This action cannot be undone.')) {
-      const updatedWards = wards.filter(w => w.id !== wardId);
-      localStorage.setItem('duty_roster_wards', JSON.stringify(updatedWards));
-      setWards(updatedWards);
-      
-      // Remove ward from all users' assignments
-      const updatedUsers = users.map(u => ({
-        ...u,
-        assignedWards: (u.assignedWards || []).filter(wId => wId !== wardId)
-      }));
-      localStorage.setItem('clinical_users', JSON.stringify(updatedUsers));
-      setUsers(updatedUsers);
-      setSelectedWard(null);
+      try {
+        setError('');
+        setIsLoading(true);
+        await deleteWard(wardId);
+
+        const updatedWards = wards.filter(w => w.id !== wardId);
+        setWards(updatedWards);
+        
+        // Remove ward from all users' assignments (still stored locally for now)
+        const updatedUsers = users.map(u => ({
+          ...u,
+          assignedWards: (u.assignedWards || []).filter(wId => wId !== wardId)
+        }));
+        localStorage.setItem('clinical_users', JSON.stringify(updatedUsers));
+        setUsers(updatedUsers);
+        setSelectedWard(null);
+      } catch (err) {
+        setError('Failed to delete ward. Please retry.');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -81,15 +105,25 @@ export const AdminWardManagement = () => {
             </h1>
             <p className="text-blue-100 mt-1">Create and manage hospital wards</p>
           </div>
-          <button
-            onClick={() => setIsAddingWard(true)}
-            className="flex items-center gap-2 bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
-          >
-            <Plus size={18} />
-            Create Ward
-          </button>
+          <div className="flex items-center gap-3">
+            {isLoading && <Loader2 size={20} className="animate-spin" />}
+            <button
+              onClick={() => setIsAddingWard(true)}
+              className="flex items-center gap-2 bg-white text-blue-600 px-4 py-2 rounded-lg font-semibold hover:bg-blue-50 transition-colors"
+              disabled={isLoading}
+            >
+              <Plus size={18} />
+              Create Ward
+            </button>
+          </div>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       {/* Add Ward Form */}
       {isAddingWard && (
@@ -106,7 +140,8 @@ export const AdminWardManagement = () => {
             />
             <button
               onClick={handleAddWard}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-60"
+              disabled={isLoading}
             >
               Create
             </button>
@@ -151,7 +186,8 @@ export const AdminWardManagement = () => {
                       e.stopPropagation();
                       handleDeleteWard(ward.id);
                     }}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    disabled={isLoading}
                     title="Delete ward"
                   >
                     <Trash2 size={18} />
@@ -192,7 +228,7 @@ export const AdminWardManagement = () => {
                 )}
 
                 <p className="text-xs text-gray-400 mt-3">
-                  Created: {new Date(ward.createdAt).toLocaleDateString()}
+                  Created: {new Date(ward.createdAt || ward.created_at).toLocaleDateString()}
                 </p>
               </div>
             );

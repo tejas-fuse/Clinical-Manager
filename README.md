@@ -92,16 +92,13 @@ npm start
 - **React 18** - UI Framework
 - **Tailwind CSS** - Styling
 - **Lucide React** - Icons
-- **LocalStorage** - Data persistence
+- **Supabase** - Wards (shared data, in progress migration)
+- **localStorage** - Legacy client-side persistence (being phased out)
 
 ## 📝 Data Storage
 
-All data is stored locally in the browser's localStorage:
-- User accounts and credentials
-- Ward information
-- Staff assignments
-- Duty assignments
-- Change requests
+- **Shared (Supabase)**: Wards (fetch/create/delete already wired). See `supabase/schema.sql` for table and policy setup.
+- **Local (localStorage, interim)**: Users, assignments, staff, change requests. These need migration to Supabase for full multi-user sharing.
 
 ## 🔒 Security Note
 
@@ -147,6 +144,15 @@ Clinical-Manager/
 - `duty_roster_all_staff`
 - `duty_roster_all_assignments`
 - `duty_roster_change_requests`
+
+## ☁️ Supabase Setup (for shared data)
+
+1) Environment variables (Vercel + local `.env`):
+  - `REACT_APP_SUPABASE_URL`
+  - `REACT_APP_SUPABASE_ANON_KEY`
+2) In Supabase SQL editor, run `supabase/schema.sql` (creates tables, seed admin, basic policies).
+3) Redeploy on Vercel so env vars are picked up.
+4) Current scope: wards CRUD uses Supabase. Next migrations: users/auth, staff, assignments, change requests.
 
 ## 🤝 Contributing
 

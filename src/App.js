@@ -27,6 +27,11 @@ import { AdminWardManagement } from './components/AdminWardManagement';
 import { InChargeStaffPanel } from './components/InChargeStaffPanel';
 import { ROLES, SHIFTS, USER_ROLES, REQUEST_STATUS } from './constants/config';
 import { getStartOfWeek, formatDateKey, getHolidayName } from './utils/helpers';
+import { supabase } from './lib/supabaseClient';
+import { fetchWards, createWard, deleteWard } from './services/wards';
+import { listStaffByWard, createStaff, deleteStaff } from './services/staff';
+import { listAssignmentsByWard, addAssignment, removeAssignment as removeAssignmentApi } from './services/assignments';
+import { listRequestsByWard, createChangeRequest, updateRequestStatus } from './services/changeRequests';
 
 // Icon mapping for shifts
 const SHIFT_ICONS = {
@@ -38,46 +43,55 @@ const SHIFT_ICONS = {
 
 export default function DutyRosterApp() {
   // --- Authentication State ---
-  const [currentUser, setCurrentUser] = useState(() => {
-    const saved = localStorage.getItem('clinical_current_user');
-    return saved ? JSON.parse(saved) : null;
-  });
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(!currentUser);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(true);
 
-  // Initialize default admin if no users exist
+  // Map Supabase user to app shape
+  const mapSupabaseUser = (user) => {
+    if (!user) return null;
+    const meta = user.user_metadata || {};
+    return {
+      id: user.id,
+      username: user.email || user.phone || 'user',
+      fullName: meta.fullName || user.email || 'User',
+      role: meta.role || 'staff',
+      assignedWards: meta.assignedWards || [],
+    };
+  };
+
+  // Listen for Supabase auth session
   useEffect(() => {
-    const savedUsers = localStorage.getItem('clinical_users');
-    const parsedUsers = savedUsers ? JSON.parse(savedUsers) : [];
-    
-    if (parsedUsers.length === 0) {
-      const defaultAdmin = {
-        id: 'admin-default-' + Date.now(),
-        username: 'admin',
-        password: 'admin123',
-        fullName: 'System Administrator',
-        role: 'admin'
-      };
-      localStorage.setItem('clinical_users', JSON.stringify([defaultAdmin]));
-      console.log('Created default admin user');
-    } else {
-      console.log('Users already exist:', parsedUsers.length);
-    }
+    let mounted = true;
+
+    const initSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+      const mapped = mapSupabaseUser(data.session?.user);
+      setCurrentUser(mapped);
+      setIsLoginModalOpen(!mapped);
+    };
+
+    initSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      const mapped = mapSupabaseUser(session?.user);
+      setCurrentUser(mapped);
+      setIsLoginModalOpen(!mapped);
+    });
+
+    return () => {
+      mounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   // --- Navigation State ---
-  const [activeTab, setActiveTab] = useState(() => {
-    // Admin starts on admin panel, others on roster
-    return currentUser && USER_ROLES[currentUser.role]?.canManageUsers ? 'admin' : 'roster';
-  });
+  const [activeTab, setActiveTab] = useState('roster');
 
   // --- State ---
   const [currentDate, setCurrentDate] = useState(new Date());
-  
-  // Wards State - NOW DEFAULTS TO EMPTY ARRAY
-  const [wards, setWards] = useState(() => {
-    const saved = localStorage.getItem('duty_roster_wards');
-    return saved ? JSON.parse(saved) : []; 
-  });
+
+  const [wards, setWards] = useState([]);
 
   // Normalize assigned ward IDs (handles legacy data storing objects instead of IDs)
   const assignedWardIds = useMemo(() => {
@@ -107,16 +121,10 @@ export default function DutyRosterApp() {
   }, [filteredWards, currentWardId]);
 
   // Staff State (Keyed by Ward ID)
-  const [allStaff, setAllStaff] = useState(() => {
-    const saved = localStorage.getItem('duty_roster_all_staff');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [allStaff, setAllStaff] = useState({});
   
   // Assignment State (Keyed by Ward ID)
-  const [allAssignments, setAllAssignments] = useState(() => {
-    const saved = localStorage.getItem('duty_roster_all_assignments');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const [allAssignments, setAllAssignments] = useState({});
 
   // Derived State for Current View
   const staffList = useMemo(() => allStaff[currentWardId] || [], [allStaff, currentWardId]);
@@ -164,33 +172,89 @@ export default function DutyRosterApp() {
   const [newWardNameInput, setNewWardNameInput] = useState('');
 
   // Change Requests State
-  const [changeRequests, setChangeRequests] = useState(() => {
-    const saved = localStorage.getItem('duty_roster_change_requests');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [changeRequests, setChangeRequests] = useState([]);
 
   const pendingRequestsCount = changeRequests.filter(r => r.status === REQUEST_STATUS.PENDING).length;
 
   // --- Effects ---
+  // Load wards from Supabase
   useEffect(() => {
-    localStorage.setItem('clinical_current_user', JSON.stringify(currentUser));
-  }, [currentUser]);
+    const load = async () => {
+      try {
+        const data = await fetchWards();
+        setWards(data);
+        if (data.length && !currentWardId) {
+          setCurrentWardId(data[0].id);
+        }
+      } catch (err) {
+        console.error('Failed to load wards', err);
+      }
+    };
+    load();
+  }, [currentWardId]);
 
+  // Load staff when ward changes
   useEffect(() => {
-    localStorage.setItem('duty_roster_wards', JSON.stringify(wards));
-  }, [wards]);
+    if (!currentWardId) return;
+    const loadStaff = async () => {
+      try {
+        const staff = await listStaffByWard(currentWardId);
+        const mapped = staff.map(s => ({ ...s, name: s.full_name }));
+        setAllStaff(prev => ({ ...prev, [currentWardId]: mapped }));
+      } catch (err) {
+        console.error('Failed to load staff', err);
+      }
+    };
+    loadStaff();
+  }, [currentWardId]);
 
+  // Load assignments when ward changes
   useEffect(() => {
-    localStorage.setItem('duty_roster_all_staff', JSON.stringify(allStaff));
-  }, [allStaff]);
+    if (!currentWardId) return;
+    const loadAssignments = async () => {
+      try {
+        const items = await listAssignmentsByWard(currentWardId);
+        const mapped = items.reduce((acc, a) => {
+          const day = acc[a.date_key] || {};
+          const shiftArr = day[a.shift_id] || [];
+          return {
+            ...acc,
+            [a.date_key]: {
+              ...day,
+              [a.shift_id]: shiftArr.includes(a.staff_id) ? shiftArr : [...shiftArr, a.staff_id]
+            }
+          };
+        }, {});
+        setAllAssignments(prev => ({ ...prev, [currentWardId]: mapped }));
+      } catch (err) {
+        console.error('Failed to load assignments', err);
+      }
+    };
+    loadAssignments();
+  }, [currentWardId]);
 
+  // Load change requests when ward changes
   useEffect(() => {
-    localStorage.setItem('duty_roster_all_assignments', JSON.stringify(allAssignments));
-  }, [allAssignments]);
-
-  useEffect(() => {
-    localStorage.setItem('duty_roster_change_requests', JSON.stringify(changeRequests));
-  }, [changeRequests]);
+    if (!currentWardId) return;
+    const loadRequests = async () => {
+      try {
+        const items = await listRequestsByWard(currentWardId);
+        const mapped = (items || []).map(r => ({
+          id: r.id,
+          userName: r.payload?.userName || 'User',
+          reason: r.payload?.reason || '',
+          dateKey: r.date_key,
+          shiftLabel: r.shift_label,
+          status: r.status,
+          createdAt: r.created_at
+        }));
+        setChangeRequests(mapped);
+      } catch (err) {
+        console.error('Failed to load change requests', err);
+      }
+    };
+    loadRequests();
+  }, [currentWardId]);
 
   // --- Date Logic ---
   const startOfWeek = useMemo(() => getStartOfWeek(currentDate), [currentDate]);
@@ -208,27 +272,18 @@ export default function DutyRosterApp() {
   // --- Handlers ---
 
   const handleLogin = (user) => {
-    console.log('User logged in:', user);
-    console.log('User role:', user.role);
-    console.log('Can manage users:', USER_ROLES[user.role]?.canManageUsers);
-    setCurrentUser(user);
+    const mapped = mapSupabaseUser(user);
+    setCurrentUser(mapped);
     setIsLoginModalOpen(false);
-    // Set active tab based on user role
-    if (USER_ROLES[user.role]?.canManageUsers) {
-      console.log('Setting active tab to admin');
-      setActiveTab('admin');
-    } else {
-      console.log('Setting active tab to roster');
-      setActiveTab('roster');
-    }
+    setActiveTab(USER_ROLES[mapped?.role]?.canManageUsers ? 'admin' : 'roster');
   };
 
-  const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      setCurrentUser(null);
-      setIsLoginModalOpen(true);
-      setActiveTab('roster');
-    }
+  const handleLogout = async () => {
+    if (!window.confirm('Are you sure you want to logout?')) return;
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setIsLoginModalOpen(true);
+    setActiveTab('roster');
   };
 
   const handlePrevWeek = () => {
@@ -244,29 +299,33 @@ export default function DutyRosterApp() {
   };
 
   const openWardModal = () => {
-      setNewWardNameInput('');
-      setIsWardModalOpen(true);
+    setNewWardNameInput('');
+    setIsWardModalOpen(true);
   };
 
-  const saveNewWard = () => {
-      if (newWardNameInput && newWardNameInput.trim()) {
-          const newId = newWardNameInput.toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + Date.now();
-          const newWard = { id: newId, name: newWardNameInput.trim() };
-          
-          setWards([...wards, newWard]);
-          setAllStaff(prev => ({ ...prev, [newId]: [] })); 
-          setAllAssignments(prev => ({ ...prev, [newId]: {} }));
-          setCurrentWardId(newId);
-          
-          setIsWardModalOpen(false);
+  const saveNewWard = async () => {
+    if (newWardNameInput && newWardNameInput.trim()) {
+      try {
+        const newWard = await createWard(newWardNameInput.trim());
+        setWards(prev => [...prev, newWard]);
+        setAllStaff(prev => ({ ...prev, [newWard.id]: [] }));
+        setAllAssignments(prev => ({ ...prev, [newWard.id]: {} }));
+        setCurrentWardId(newWard.id);
+        setIsWardModalOpen(false);
+      } catch (err) {
+        alert('Failed to create ward. Please retry.');
+        console.error(err);
       }
+    }
   };
 
-  const handleDeleteWard = () => {
+  const handleDeleteWard = async () => {
     if (!currentWardId) return;
     const wardName = wards.find(w => w.id === currentWardId)?.name;
     
     if(window.confirm(`Are you sure you want to delete "${wardName}" and all its data? This cannot be undone.`)) {
+      try {
+        await deleteWard(currentWardId);
         const newWards = wards.filter(w => w.id !== currentWardId);
         setWards(newWards);
         
@@ -285,30 +344,40 @@ export default function DutyRosterApp() {
         } else {
             setCurrentWardId('');
         }
+      } catch (err) {
+        alert('Failed to delete ward. Please retry.');
+        console.error(err);
+      }
     }
   };
 
-  const handleAddStaff = () => {
+  const handleAddStaff = async () => {
     if (!newStaffName.trim()) return;
-    const newStaff = {
-      id: Date.now(),
-      name: newStaffName,
-      role: newStaffRole
-    };
-    
-    setAllStaff(prev => ({
+    try {
+      const created = await createStaff(currentWardId, newStaffName.trim(), newStaffRole);
+      setAllStaff(prev => ({
         ...prev,
-        [currentWardId]: [...(prev[currentWardId] || []), newStaff]
-    }));
-    setNewStaffName('');
+        [currentWardId]: [...(prev[currentWardId] || []), { id: created.id, name: created.full_name, role: created.role }]
+      }));
+      setNewStaffName('');
+    } catch (err) {
+      alert('Failed to add staff.');
+      console.error(err);
+    }
   };
 
-  const handleRemoveStaffGlobal = (id) => {
+  const handleRemoveStaffGlobal = async (id) => {
     if(window.confirm("Remove this staff member permanently?")) {
+      try {
+        await deleteStaff(id);
         setAllStaff(prev => ({
-            ...prev,
-            [currentWardId]: prev[currentWardId].filter(s => s.id !== id)
+          ...prev,
+          [currentWardId]: (prev[currentWardId] || []).filter(s => s.id !== id)
         }));
+      } catch (err) {
+        alert('Failed to remove staff.');
+        console.error(err);
+      }
     }
   };
 
@@ -327,47 +396,56 @@ export default function DutyRosterApp() {
     }
   };
 
-  const assignStaff = (staffId) => {
+  const assignStaff = async (staffId) => {
     if (!selectedCell) return;
     const { dateKey, shiftId } = selectedCell;
-
-    setAllAssignments(prevAll => {
-      const wardAssignments = prevAll[currentWardId] || {};
-      const dayData = wardAssignments[dateKey] || {};
-      const shiftData = dayData[shiftId] || [];
-      
-      if (shiftData.includes(staffId)) return prevAll;
-
-      return {
-        ...prevAll,
-        [currentWardId]: {
-            ...wardAssignments,
-            [dateKey]: {
-                ...dayData,
-                [shiftId]: [...shiftData, staffId]
-            }
-        }
-      };
-    });
-  };
-
-  const removeAssignment = (dateKey, shiftId, staffId) => {
-    setAllAssignments(prevAll => {
+    try {
+      await addAssignment({ wardId: currentWardId, staffId, dateKey, shiftId });
+      setAllAssignments(prevAll => {
         const wardAssignments = prevAll[currentWardId] || {};
         const dayData = wardAssignments[dateKey] || {};
         const shiftData = dayData[shiftId] || [];
-
+        if (shiftData.includes(staffId)) return prevAll;
         return {
-            ...prevAll,
-            [currentWardId]: {
-                ...wardAssignments,
-                [dateKey]: {
-                    ...dayData,
-                    [shiftId]: shiftData.filter(id => id !== staffId)
-                }
-            }
+          ...prevAll,
+          [currentWardId]: {
+              ...wardAssignments,
+              [dateKey]: {
+                  ...dayData,
+                  [shiftId]: [...shiftData, staffId]
+              }
+          }
         };
-    });
+      });
+    } catch (err) {
+      alert('Failed to assign staff.');
+      console.error(err);
+    }
+  };
+
+  const removeAssignment = async (dateKey, shiftId, staffId) => {
+    try {
+      await removeAssignmentApi({ wardId: currentWardId, staffId, dateKey, shiftId });
+      setAllAssignments(prevAll => {
+          const wardAssignments = prevAll[currentWardId] || {};
+          const dayData = wardAssignments[dateKey] || {};
+          const shiftData = dayData[shiftId] || [];
+
+          return {
+              ...prevAll,
+              [currentWardId]: {
+                  ...wardAssignments,
+                  [dateKey]: {
+                      ...dayData,
+                      [shiftId]: shiftData.filter(id => id !== staffId)
+                  }
+              }
+          };
+      });
+    } catch (err) {
+      alert('Failed to remove assignment.');
+      console.error(err);
+    }
   };
 
   const handlePrint = () => {
@@ -379,28 +457,77 @@ export default function DutyRosterApp() {
     setSelectedCell(null);
   };
 
-  const handleSubmitChangeRequest = (request) => {
-    setChangeRequests(prev => [...prev, request]);
+  const handleSubmitChangeRequest = async (request) => {
+    try {
+      const payload = {
+        ward_id: currentWardId,
+        staff_id: null,
+        requested_by: currentUser?.id || null,
+        type: 'change',
+        payload: { reason: request.reason, userName: request.userName },
+        status: REQUEST_STATUS.PENDING,
+        date_key: request.dateKey,
+        shift_label: request.shiftLabel
+      };
+      const created = await createChangeRequest(payload);
+      const mapped = {
+        id: created.id,
+        userName: created.payload?.userName || request.userName,
+        reason: created.payload?.reason || request.reason,
+        dateKey: created.date_key,
+        shiftLabel: created.shift_label,
+        status: created.status,
+        createdAt: created.created_at
+      };
+      setChangeRequests(prev => [mapped, ...prev]);
+    } catch (err) {
+      alert('Failed to submit request.');
+      console.error(err);
+    }
   };
 
-  const handleApproveRequest = (requestId) => {
-    // Find the request
+  const handleApproveRequest = async (requestId) => {
     const request = changeRequests.find(r => r.id === requestId);
     if (!request) return;
 
     // Find the staff member in the current ward
     const wardStaff = allStaff[currentWardId] || [];
-    const staff = wardStaff.find(s => s.name.toLowerCase() === request.userName.toLowerCase());
-    
-    if (staff) {
-      // Add the staff member to the assignment
-      assignStaff(request.dateKey, getShiftIdFromLabel(request.shiftLabel), staff.id);
-    }
+    const staff = wardStaff.find(s => s.name?.toLowerCase() === request.userName?.toLowerCase());
 
-    // Update request status
-    setChangeRequests(prev => 
-      prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.APPROVED } : r)
-    );
+    try {
+      if (staff) {
+        await addAssignment({
+          wardId: currentWardId,
+          staffId: staff.id,
+          dateKey: request.dateKey,
+          shiftId: getShiftIdFromLabel(request.shiftLabel)
+        });
+        setAllAssignments(prevAll => {
+          const wardAssignments = prevAll[currentWardId] || {};
+          const dayData = wardAssignments[request.dateKey] || {};
+          const shiftData = dayData[getShiftIdFromLabel(request.shiftLabel)] || [];
+          if (shiftData.includes(staff.id)) return prevAll;
+          return {
+            ...prevAll,
+            [currentWardId]: {
+              ...wardAssignments,
+              [request.dateKey]: {
+                ...dayData,
+                [getShiftIdFromLabel(request.shiftLabel)]: [...shiftData, staff.id]
+              }
+            }
+          };
+        });
+      }
+
+      await updateRequestStatus(requestId, REQUEST_STATUS.APPROVED);
+      setChangeRequests(prev => 
+        prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.APPROVED } : r)
+      );
+    } catch (err) {
+      alert('Failed to approve request.');
+      console.error(err);
+    }
   };
 
   // Helper function to get shift ID from shift label
@@ -409,10 +536,16 @@ export default function DutyRosterApp() {
     return shift ? shift.id : 'morning';
   };
 
-  const handleRejectRequest = (requestId) => {
-    setChangeRequests(prev => 
-      prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.REJECTED } : r)
-    );
+  const handleRejectRequest = async (requestId) => {
+    try {
+      await updateRequestStatus(requestId, REQUEST_STATUS.REJECTED);
+      setChangeRequests(prev => 
+        prev.map(r => r.id === requestId ? { ...r, status: REQUEST_STATUS.REJECTED } : r)
+      );
+    } catch (err) {
+      alert('Failed to reject request.');
+      console.error(err);
+    }
   };
 
   // --- Render ---
