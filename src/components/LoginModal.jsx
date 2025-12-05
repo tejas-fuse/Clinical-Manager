@@ -34,17 +34,48 @@ export const LoginModal = ({ isOpen, onClose, onLogin }) => {
 
     try {
       setIsSubmitting(true);
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: username,
-        password
-      });
+      
+      // Query users_app table for the user
+      const { data: users, error: queryError } = await supabase
+        .from('users_app')
+        .select('*')
+        .eq('username', username)
+        .single();
 
-      if (authError || !data?.user) {
-        setError(authError?.message || 'Invalid credentials');
+      if (queryError || !users) {
+        setError('Invalid username or password');
         return;
       }
 
-      onLogin(data.user);
+      // For MVP: Call Supabase RPC to verify password
+      // If RPC doesn't exist, fall back to client-side comparison
+      try {
+        const { data, error: rpcError } = await supabase.rpc('verify_password', {
+          username_input: username,
+          password_input: password
+        });
+
+        if (rpcError || !data) {
+          setError('Invalid username or password');
+          return;
+        }
+      } catch {
+        // Fallback: simple string comparison (NOT SECURE - for MVP only)
+        // In production, use RPC on backend
+        setError('Password verification unavailable. Please contact admin.');
+        return;
+      }
+
+      // Convert users_app row to app user shape
+      const appUser = {
+        id: users.id,
+        username: users.username,
+        fullName: users.full_name,
+        role: users.role,
+        assignedWards: users.assigned_wards || []
+      };
+
+      onLogin(appUser);
     } catch (err) {
       setError('Unable to login right now. Please retry.');
       console.error(err);

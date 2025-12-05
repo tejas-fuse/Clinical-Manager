@@ -27,7 +27,6 @@ import { AdminWardManagement } from './components/AdminWardManagement';
 import { InChargeStaffPanel } from './components/InChargeStaffPanel';
 import { ROLES, SHIFTS, USER_ROLES, REQUEST_STATUS } from './constants/config';
 import { getStartOfWeek, formatDateKey, getHolidayName } from './utils/helpers';
-import { supabase } from './lib/supabaseClient';
 import { fetchWards, createWard, deleteWard } from './services/wards';
 import { listStaffByWard, createStaff, deleteStaff } from './services/staff';
 import { listAssignmentsByWard, addAssignment, removeAssignment as removeAssignmentApi } from './services/assignments';
@@ -46,43 +45,18 @@ export default function DutyRosterApp() {
   const [currentUser, setCurrentUser] = useState(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(true);
 
-  // Map Supabase user to app shape
-  const mapSupabaseUser = (user) => {
-    if (!user) return null;
-    const meta = user.user_metadata || {};
-    return {
-      id: user.id,
-      username: user.email || user.phone || 'user',
-      fullName: meta.fullName || user.email || 'User',
-      role: meta.role || 'staff',
-      assignedWards: meta.assignedWards || [],
-    };
-  };
-
-  // Listen for Supabase auth session
+  // Load user from localStorage on mount
   useEffect(() => {
-    let mounted = true;
-
-    const initSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      const mapped = mapSupabaseUser(data.session?.user);
-      setCurrentUser(mapped);
-      setIsLoginModalOpen(!mapped);
-    };
-
-    initSession();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      const mapped = mapSupabaseUser(session?.user);
-      setCurrentUser(mapped);
-      setIsLoginModalOpen(!mapped);
-    });
-
-    return () => {
-      mounted = false;
-      authListener?.subscription?.unsubscribe();
-    };
+    const saved = localStorage.getItem('currentUser');
+    if (saved) {
+      try {
+        const user = JSON.parse(saved);
+        setCurrentUser(user);
+        setIsLoginModalOpen(false);
+      } catch (e) {
+        console.error('Failed to restore user session', e);
+      }
+    }
   }, []);
 
   // --- Navigation State ---
@@ -272,18 +246,19 @@ export default function DutyRosterApp() {
   // --- Handlers ---
 
   const handleLogin = (user) => {
-    const mapped = mapSupabaseUser(user);
-    setCurrentUser(mapped);
+    // user is already in app shape from users_app table
+    setCurrentUser(user);
     setIsLoginModalOpen(false);
-    setActiveTab(USER_ROLES[mapped?.role]?.canManageUsers ? 'admin' : 'roster');
+    localStorage.setItem('currentUser', JSON.stringify(user));
+    setActiveTab(USER_ROLES[user?.role]?.canManageUsers ? 'admin' : 'roster');
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     if (!window.confirm('Are you sure you want to logout?')) return;
-    await supabase.auth.signOut();
     setCurrentUser(null);
     setIsLoginModalOpen(true);
     setActiveTab('roster');
+    localStorage.removeItem('currentUser');
   };
 
   const handlePrevWeek = () => {

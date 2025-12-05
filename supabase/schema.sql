@@ -146,3 +146,30 @@ create trigger on_auth_user_created
 
 -- Note: For production, tighten RLS policies to enforce role-based access (e.g., admins only can delete wards).
 -- Currently relaxed for MVP; authenticated users can do most operations.
+
+-- Password verification function (uses pgcrypto for bcrypt)
+create or replace function public.verify_password(
+  username_input text,
+  password_input text
+)
+returns boolean
+language plpgsql
+security definer
+as $$
+declare
+  stored_hash text;
+begin
+  -- Get the password hash for the user
+  select password_hash into stored_hash
+  from public.users_app
+  where username = username_input;
+
+  if stored_hash is null then
+    return false;
+  end if;
+
+  -- Use pgcrypto's crypt function to compare passwords
+  -- Note: This requires pgcrypto extension and the hash must be bcrypt format
+  return crypt(password_input, stored_hash) = stored_hash;
+end;
+$$;
